@@ -31,6 +31,36 @@ export const addNewPost = createAsyncThunk(
   }
 );
 
+export const updatePost = createAsyncThunk(
+  "posts/updatePost",
+  async (initialPost) => {
+    const { id } = initialPost;
+    try {
+      const response = await axios.put(`${POSTS_URL}/${id}`, initialPost);
+      return response.data;
+    } catch (error) {
+      // return error.message;
+      return initialPost; // only for testing redux
+    }
+  }
+);
+
+export const deletePost = createAsyncThunk(
+  "posts/deletePost",
+  async (initialPost) => {
+    const { id } = initialPost;
+    try {
+      const response = await axios.delete(`${POSTS_URL}/${id}`);
+      if (response?.status === 200) {
+        return initialPost;
+      }
+      return `${response.status}: ${response.statusText}`;
+    } catch (error) {
+      return error.message;
+    }
+  }
+);
+
 const postsSlice = createSlice({
   name: "posts",
   initialState,
@@ -67,22 +97,16 @@ const postsSlice = createSlice({
     },
   },
   extraReducers(builder) {
-    // add a case for when fetchPosts.pending is called
     builder
       .addCase(fetchPosts.pending, (state, action) => {
-        // set the state status to "loading"
         state.status = "loading";
       })
-      // add a case for when fetchPosts.fulfilled is called
       .addCase(fetchPosts.fulfilled, (state, action) => {
-        // set the state status to "succeeded"
         state.status = "succeeded";
-        // add a date and reactions to each post
+        // Adding date and reactions
         let min = 1;
         const loadedPosts = action.payload.map((post) => {
-          // add a date to the post, starting with the current time minus one minute
           post.date = sub(new Date(), { minutes: min++ }).toISOString();
-          // add reactions to the post, starting with zero for each type
           post.reactions = {
             thumbsUp: 0,
             wow: 0,
@@ -90,20 +114,16 @@ const postsSlice = createSlice({
             rocket: 0,
             coffee: 0,
           };
-          // return the updated post object
           return post;
         });
+
         // Add any fetched posts to the array
-        state.posts = loadedPosts;
+        state.posts = state.posts.concat(loadedPosts);
       })
-      // add a case for when fetchPosts.rejected is called
       .addCase(fetchPosts.rejected, (state, action) => {
-        // set the state status to "failed"
         state.status = "failed";
-        // add the error payload to the state
         state.error = action.error.message;
       })
-      // add a case for when addNewPost.fulfilled is called
       .addCase(addNewPost.fulfilled, (state, action) => {
         // Fix for API post IDs:
         // Creating sortedPosts & assigning the id
@@ -128,6 +148,27 @@ const postsSlice = createSlice({
         };
         console.log(action.payload);
         state.posts.push(action.payload);
+      })
+      .addCase(updatePost.fulfilled, (state, action) => {
+        if (!action.payload?.id) {
+          console.log("Update could not complete");
+          console.log(action.payload);
+          return;
+        }
+        const { id } = action.payload;
+        action.payload.date = new Date().toISOString();
+        const posts = state.posts.filter((post) => post.id !== id);
+        state.posts = [...posts, action.payload];
+      })
+      .addCase(deletePost.fulfilled, (state, action) => {
+        if (!action.payload?.id) {
+          console.log("Delete could not complete");
+          console.log(action.payload);
+          return;
+        }
+        const { id } = action.payload;
+        const posts = state.posts.filter((post) => post.id !== id);
+        state.posts = posts;
       });
   },
 });
@@ -137,6 +178,9 @@ export const selectAllPosts = (state) => state.posts.posts;
 export const getPostsStatus = (state) => state.posts.status;
 
 export const getPostsError = (state) => state.posts.error;
+
+export const selectPostById = (state, postId) =>
+  state.posts.posts.find((post) => post.id === postId);
 
 export const { postAdded, reactionAdded } = postsSlice.actions;
 
